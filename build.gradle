@@ -1,0 +1,166 @@
+import groovy.json.JsonSlurper
+
+buildscript {
+	repositories {
+		jcenter()
+		maven {
+			name = "forge"
+			url = "http://files.minecraftforge.net/maven"
+		}
+		maven {
+			name = "gradle"
+			url "https://plugins.gradle.org/m2/"
+		}
+	}
+	dependencies {
+		classpath "net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT"
+		classpath "gradle.plugin.com.matthewprenger:CurseGradle:1.0.7"
+	}
+}
+
+apply plugin: "net.minecraftforge.gradle.forge"
+apply plugin: "maven-publish"
+apply plugin: "com.matthewprenger.cursegradle"
+
+class Secrets {
+	def data = null
+
+	def getProperty(String key) {
+		return data ? data[key] : ""
+	}
+}
+
+def secretFile = file "../secret.json"
+project.ext.secret = new Secrets()
+if (secretFile.exists()) {
+	secretFile.withReader {
+		project.ext.secret.data = new JsonSlurper().parse it
+	}
+}
+
+ext.groupId = "com.pau101"
+ext.artifactId = "cacti"
+ext.modVersion = "1.0.1"
+
+version = "${modVersion}-1.12.2"
+group = "${groupId}.${artifactId}"
+archivesBaseName = artifactId
+sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
+
+minecraft {
+	version = "1.12.2-14.23.5.2847"
+	runDir = "run"
+	mappings = "snapshot_20171003"
+	makeObfSourceJar = false
+}
+
+dependencies {}
+
+processResources {
+	inputs.property "version", project.modVersion
+	inputs.property "mcversion", project.minecraft.version
+	from(sourceSets.main.resources.srcDirs) {
+		include "mcmod.info"
+		expand "version": project.version, "mcversion": project.minecraft.version
+	}
+	from(sourceSets.main.resources.srcDirs) {
+		exclude "mcmod.info"
+	}
+}
+
+ext.sharedManifest = manifest {
+	attributes(
+		"FMLAT": "cacti_at.cfg",
+		"ModSide": "CLIENT"
+	)
+}
+
+jar {
+	manifest = project.manifest {
+		from sharedManifest
+	}
+}
+
+javadoc {
+	include "com/pau101/cacti/api/*"
+	options.setLinksOffline([
+		createJavadocLink("http://docs.oracle.com/javase/8/docs/api/"),
+		createJavadocLink("http://google.github.io/guava/releases/snapshot/api/docs")
+	])
+	options.addStringOption("-subpackages com.pau101.cacti.api")
+}
+
+def createJavadocLink(String url) {
+	return new JavadocOfflineLink(url, url);
+}
+
+task devJar(type: Jar) {
+	classifier = "dev"
+	from sourceSets.main.output
+	manifest = project.manifest {
+		from sharedManifest
+	}
+}
+
+task sourcesJar(type: Jar) {
+	classifier = "sources"
+	from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+	classifier = "javadoc"
+	from javadoc.destinationDir
+}
+
+tasks.build.dependsOn devJar, sourcesJar, javadocJar
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			groupId project.groupId
+			artifactId project.artifactId
+			version project.version
+			from components.java
+			artifact devJar {
+				classifier "dev"
+			}
+			artifact sourcesJar {
+				classifier "sources"
+			}
+			artifact javadocJar {
+				classifier "javadoc"
+			}
+		}
+	}
+	repositories {
+		maven {
+			credentials {
+				username secret.username
+				password secret.password
+			}
+			url secret.url
+		}
+	}
+}
+
+curseforge {
+	apiKey = secret.curseforgeAPIKey
+	project {
+		id = "248552"
+		releaseType = "release"
+		changelog = "Initial release"
+		def versionPart = "Cacti $project.modVersion"
+		mainArtifact(jar) {
+			displayName = versionPart
+		}
+		addArtifact(devJar) {
+			displayName = "$versionPart Development"
+		}
+		addArtifact(sourcesJar) {
+			displayName = "$versionPart Sources"
+		}
+		addArtifact(javadocJar) {
+			displayName = "$versionPart Javadoc"
+		}
+	}
+}
