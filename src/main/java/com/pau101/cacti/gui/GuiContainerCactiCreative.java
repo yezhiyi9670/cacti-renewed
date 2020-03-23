@@ -118,6 +118,18 @@ public final class GuiContainerCactiCreative extends GuiContainerCreative {
 			setSetTabAction(SetTabAction.SET);
 		}
 		init();
+		
+		// Fix
+		//   Close and reopen creative inventory on the "survival inventory" tab results \
+		//   in a temporary blank creative inventory
+		// https://github.com/yezhiyi9670/cacti-renewed/issues/2
+		// Fixing behavior:
+		//   If the player is detected to be selecting "INVENTORY" tab while opening creative inventory,
+		//   the code will "click" on the selected category, and re-select the "INVENTORY" tab.
+		if(selectedTabIndex == CreativeTabs.INVENTORY.tabIndex) {
+			setCurrentTabGroup(currentTabGroup);
+			setCurrentCreativeTab(CreativeTabs.INVENTORY);
+		}
 	}
 
 	@Override
@@ -398,14 +410,30 @@ public final class GuiContainerCactiCreative extends GuiContainerCreative {
 			updateTabs(group.getTabs());
 		}
 	}
-
-	private void updateTabs(ImmutableList<CreativeTabs> tabs) {
+	
+	private void sortCreativeTabs(List<CreativeTabs> tabs) {
+		int n = tabs.size();
+		for(int i=0;i<n-1;i++) {
+			for(int j=n-2;j>=i;j--) {
+				int k = j+1;
+				if(tabs.get(j).getTabLabel().compareTo(tabs.get(k).getTabLabel()) > 0) {
+					CreativeTabs tmp = tabs.get(k);
+					tabs.set(k, tabs.get(j));
+					tabs.set(j, tmp);
+				}
+			}
+		}
+	}
+	
+	private void updateTabs(ImmutableList<CreativeTabs> _tabs) {
+		List<CreativeTabs> tabs = new ArrayList<CreativeTabs>(_tabs);
 		CreativeTabs[] tabsArray = new CreativeTabs[tabs.size()];
 		int len = 0;
 		// I can't stand a random-shuffled vanilla creative tab group.
 		boolean isVanillaTabs = false;
 		boolean hasBlockTab = false;
 		boolean hasNothing = true;
+		sortCreativeTabs(tabs);
 		for (CreativeTabs tab : tabs) {
 			if (tab == CreativeTabs.INVENTORY) {
 				isVanillaTabs = true;
